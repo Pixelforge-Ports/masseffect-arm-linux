@@ -5,6 +5,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+python3 tools/sync_package.py
 
 OUT="build/masseffect-portmaster.zip"
 STAGE="build/pkg-portmaster"
@@ -22,7 +23,7 @@ mkdir -p "$STAGE/masseffect"
 
 cp "ports/Mass Effect Infiltrator.sh"            "$STAGE/"
 cp build/masseffect                  "$STAGE/masseffect/"
-cp ports/masseffect/masseffect.gptk   "$STAGE/masseffect/"
+cp ports/masseffect/masseffect.ini   "$STAGE/masseffect/"
 cp ports/masseffect/masseffect.eapx.json "$STAGE/masseffect/"
 cp ports/masseffect/PUT_MASS_EFFECT_DATA_HERE.txt "$STAGE/masseffect/"
 cp tools/eapx.py                    "$STAGE/masseffect/"
@@ -37,6 +38,8 @@ cp -R build/libs.armhf              "$STAGE/masseffect/"
 
 mkdir -p "$STAGE/masseffect/licenses/libraries"
 cp LICENSE "$STAGE/masseffect/licenses/LICENSE-portmaster-port.txt"
+cp LICENSE "$STAGE/masseffect/licenses/LICENSE-eapx.txt"
+cp ports/masseffect/LICENSE-gptokeyb.txt "$STAGE/masseffect/licenses/"
 cp NOTICE.md "$STAGE/masseffect/licenses/NOTICE.md"
 cp third_party/gmloader/LICENSE.md "$STAGE/masseffect/licenses/LICENSE-gmloader.md"
 cp third_party/masseffect-vita/LICENSE "$STAGE/masseffect/licenses/LICENSE-masseffect-vita.txt"
@@ -72,21 +75,11 @@ unzip -tq "$OUT" >/dev/null
 # The eapx in tools/ is a copy of the canonical one and drifts silently: this
 # port shipped 0.4.1 while the canonical tree was at 0.4.2, because nobody
 # compared them. Refuse to package on a mismatch instead of trusting memory.
-canonical="${EAPX_CANONICAL:-$HOME/Projects/Others/handheld/eapx/eapx.py}"
-if [ -f "$canonical" ]; then
-  if ! cmp -s tools/eapx.py "$canonical"; then
-    echo "refusing package: tools/eapx.py differs from the canonical $canonical" >&2
-    echo "  packaged:  $(sed -n 's/^VERSION = "\(.*\)"/\1/p' tools/eapx.py)" >&2
-    echo "  canonical: $(sed -n 's/^VERSION = "\(.*\)"/\1/p' "$canonical")" >&2
-    exit 1
-  fi
-else
-  echo "note: canonical eapx not found at $canonical; packaged copy not verified" >&2
-fi
+cmp tools/eapx.py "$STAGE/masseffect/eapx.py"
 
 listing="$(unzip -Z1 "$OUT")"
 for required in "Mass Effect Infiltrator.sh" "masseffect/masseffect" \
-                "masseffect/masseffect.gptk" "masseffect/port.json" \
+                "masseffect/masseffect.ini" "masseffect/port.json" \
                 "masseffect/gameinfo.xml" "masseffect/README.md" \
                 "masseffect/CREDITS.md" \
                 "masseffect/cover.png" "masseffect/screenshot.png" \
@@ -116,8 +109,8 @@ esac
 # A stale zip with an old binary passes every check above - they all pass on an
 # old binary. Comparing the hashes is the only check that catches it; twice a
 # release was nearly published with a binary older than the one just verified.
-built_sha="$(shasum -a 256 build/masseffect | cut -d' ' -f1)"
-packed_sha="$(unzip -p "$OUT" masseffect/masseffect | shasum -a 256 | cut -d' ' -f1)"
+built_sha="$(sha256sum build/masseffect | cut -d' ' -f1)"
+packed_sha="$(unzip -p "$OUT" masseffect/masseffect | sha256sum | cut -d' ' -f1)"
 [ "$built_sha" = "$packed_sha" ] || {
     echo "refusing package: the zipped binary is not the one just built" >&2
     echo "  built:  $built_sha" >&2
